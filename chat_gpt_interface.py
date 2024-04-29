@@ -27,7 +27,7 @@ class ChatGPT:
         self.client = openai.OpenAI(api_key=openai_token)  # Initialize the client
 
 
-    def complete_query(self, system_command: str, user_input: str, is_valid_callback: Callable[[str], bool] = None, max_attempts: int = 2) -> str:
+    def complete_query(self, system_command: str, user_input: str, is_valid_callback: Callable[[str], bool] = None, max_attempts: int = 3) -> str:
         """
         Method takes a system_command and user_input and prompts ChatGPT for a
         response. Response is checked in several ways to make sure it's valid.

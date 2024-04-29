@@ -12,8 +12,10 @@ import os
 import glob
 import json
 import shutil
+import re
 from typing import Dict, List
 from chat_gpt_interface import ChatGPT
+
 
 def get_config():
     try:
@@ -71,7 +73,7 @@ class Translatable:
         return False
     
     def get_gpt_query(self) -> str:
-        query = f"key: {self.key}\n"
+        query = f"key: {escape_special_chars(self.key)}\n"
         comment = self.info_dict["comment"] if "comment" in self.info_dict else "No comment provided."
         query += f"comment: {comment}\n"
         query += "translation: \n"
@@ -83,7 +85,7 @@ class Translatable:
             if not translation.startswith("translation: "):
                 return False
             
-            translation = translation[len("translation: "):]
+            translation = unescape_special_chars(translation[len("translation: "):])
 
             localizations_dict_update = {
                 for_language: {
@@ -102,15 +104,35 @@ class Translatable:
         except:
             return False
 
+def escape_special_chars(text):
+    # Dictionary of escape sequences that might need to be handled
+    escape_dict = {
+        '\n': '\\n',  # Newline
+        '\t': '\\t',  # Tab
+        '\r': '\\r',  # Carriage return
+        '\\': '\\\\'  # Backslash
+    }
+    # Regex to find any of the special characters that need to be escaped
+    regex_pattern = re.compile('|'.join(re.escape(key) for key in escape_dict.keys()))
+    # Replace each special character by its escaped version according to the dictionary
+    return regex_pattern.sub(lambda x: escape_dict[x.group()], text)
+
+def unescape_special_chars(text):
+    # Reverse the dictionary used for escaping
+    unescape_dict = {v: k for k, v in escape_dict.items()}
+    # Regex to find any escaped sequences that need to be unescaped
+    regex_pattern = re.compile('|'.join(re.escape(key) for key in unescape_dict.keys()))
+    # Replace each escaped placeholder with its actual character
+    return regex_pattern.sub(lambda x: unescape_dict[x.group()], text)
 
 def main():
 
-    print("Warning: This script add the translations in-place, i.e. modify the original provided file!")
-    print("If you don't have a version control system, this is not recommended!\n")
-    answer = input("Please type 'yes' to continue or any other key to abort.\n")
-    if answer != "yes":
-        print("Aborting.")
-        return
+    # print("Warning: This script add the translations in-place, i.e. modify the original provided file!")
+    # print("If you don't have a version control system, this is not recommended!\n")
+    # answer = input("Please type 'yes' to continue or any other key to abort.\n")
+    # if answer != "yes":
+    #     print("Aborting.")
+    #     return
     
 
     with open(localizable_file, "r") as f:
@@ -155,9 +177,10 @@ def main():
 
     ## send to chatGPT
     
-    print("Init ChatGPT with token: ", CHATGPT_TOKEN)
+    gptModel = "gpt-3.5-turbo"
+    print("Init ChatGPT (gptModel) with token: ", CHATGPT_TOKEN)
 
-    cpt = ChatGPT(CHATGPT_TOKEN, model="gpt-3.5-turbo")
+    cpt = ChatGPT(CHATGPT_TOKEN, model=gptModel)
 
     max_query_length = 30
     full_response = ""
@@ -188,13 +211,13 @@ def main():
             return valid
             
         info = "I want you to translate some text from " + source_lang  +  " to " + target_language + ". " + """
-        This text will be used to offer an iOS app in different languages.
+        This text will be used to offer an app in different languages.
         The input given to you will consist of three lines for each phrase that needs to be translated.
         First, the phrase in """ + source_lang + """.
         Second, a comment that describes in which context the phrase is occuring in the application's UI. Make sure that the translation you provide fits this context.
         Third, a line starting with "translation: " in which you should add your translation.
         
-        Please return only the lines starting with "translation:" with your added translation after the colon. Do not include the comments in the translations, those are only to add context.
+        Please return only the lines starting with "translation:" with your added translation after the colon (some translations may include whitespace such as newlines). Do not include the comments in the translations, those are only to add context.
         """
         
         if APP_CONTEXT:
